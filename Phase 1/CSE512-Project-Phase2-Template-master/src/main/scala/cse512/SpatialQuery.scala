@@ -94,4 +94,25 @@ object SpatialQuery extends App{
 
     return resultDf.count()
   }
+  
+  def ST_Within(point1:String, point2:String, distance:Double) : Boolean ={
+    val xy_1 = point1.split(",")
+    val x_1 = xy_1(0).trim().toDouble
+    val y_1 = xy_1(1).trim().toDouble
+
+    val xy_2 = point2.split(",")
+    val x_2 = xy_2(0).trim().toDouble
+    val y_2 = xy_2(1).trim().toDouble
+
+
+    val ed = scala.math.pow(scala.math.pow((x_1 - x_2),2) + scala.math.pow((y_1 - y_2),2),0.5) 
+
+    if(ed <= distance){
+        return true
+    }
+    else{
+        return false
+    }
+
+  }
 }
