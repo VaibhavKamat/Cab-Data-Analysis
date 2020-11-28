@@ -47,36 +47,36 @@ object HotcellUtils {
     return calendar.get(Calendar.DAY_OF_MONTH)
   }
 
-  def square (a:Int) : Double = {
+  // YOU NEED TO CHANGE THIS PART
+
+  def calculateSquare (a:Int) : Double = {
     (a * a).toDouble
   }
 
-  def getNeighboursNumber (x:Int, y:Int, z:Int, xMax:Int, yMax:Int,zMax:Int,xMin:Int, yMin:Int,zMin:Int): Int = {
-    var numOfEdge :Int  = 0
+  def getNeighbourValue (x:Int, y:Int, z:Int, xMax:Int, yMax:Int,zMax:Int,xMin:Int, yMin:Int,zMin:Int): Int = {
+    var toalEdges :Int  = 0
     if( x == xMax || x == xMin){
-      numOfEdge += 1
+      toalEdges += 1
     }
     if(y == yMax || y == yMin) {
-      numOfEdge += 1
+      toalEdges += 1
     }
     if (z == zMax || z == zMin) {
-      numOfEdge += 1
+      toalEdges += 1
     }
-    var returnVal : Int = 26
-    numOfEdge match {
-      case 1=> returnVal =  17
-      case 2=> returnVal =  10
-      case 3=> returnVal =   7
-      case 0=> returnVal =  26
+    var result : Int = 26
+    toalEdges match {
+      case 1=> result =  17
+      case 2=> result =  10
+      case 3=> result =   7
+      case 0=> result =  26
     }
-    return returnVal
+    return result
   }
 
-  def getGetisOrdScore(sumOfCount:Int, numOfNeighbors:Int,mean: Double, std:Double, totalNumberOfCell: Int) : Double = {
-    val numerator = sumOfCount.toDouble - (mean * numOfNeighbors.toDouble)
-    val denominator = std * math.sqrt(( (totalNumberOfCell * numOfNeighbors.toDouble) - (numOfNeighbors.toDouble * numOfNeighbors.toDouble))/ (totalNumberOfCell-1.0))
-    return numerator/denominator
+  def calculateOrdScore(sum:Int, neighbors:Int,mean: Double, std:Double, totalCells: Int) : Double = {
+    val part1 = sum.toDouble - (mean * neighbors.toDouble)
+    val part2 = std * math.sqrt(( (totalCells * neighbors.toDouble) - (neighbors.toDouble * neighbors.toDouble))/ (totalCells-1.0))
+    return part1/part2
   }
-
-  // YOU NEED TO CHANGE THIS PART
 }

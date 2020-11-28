@@ -44,60 +44,55 @@ object HotcellAnalysis {
     val maxZ = 31
     val numCells = (maxX - minX + 1)*(maxY - minY + 1)*(maxZ - minZ + 1)
 
-    spark.udf.register("square", (inputX: Int) => HotcellUtils.square(inputX))
+    // YOU NEED TO CHANGE THIS PART
+    spark.udf.register("calculateSquare", (inputX: Int) => HotcellUtils.calculateSquare(inputX))
 
-    spark.udf.register("getNeighboursNumber", (minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int, inputX: Int, inputY: Int, inputZ: Int)
-    => HotcellUtils.getNeighboursNumber(minX, minY, minZ, maxX, maxY, maxZ, inputX, inputY, inputZ))
+    spark.udf.register("getNeighbourValue", (minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int, inputX: Int, inputY: Int, inputZ: Int)
+    => HotcellUtils.getNeighbourValue(minX, minY, minZ, maxX, maxY, maxZ, inputX, inputY, inputZ))
 
-    spark.udf.register("getGetisOrdScore", (sumOfCount:Int,  numOfNeighbors:Int, mean: Double, std:Double, totalNumberOfCell: Int)
-    => HotcellUtils.getGetisOrdScore(sumOfCount,  numOfNeighbors, mean, std, totalNumberOfCell))
+    spark.udf.register("calculateOrdScore", (countSum:Int,  totalNeighbors:Int, mean: Double, std:Double, totalCells: Int)
+    => HotcellUtils.calculateOrdScore(countSum,  totalNeighbors, mean, std, totalCells))
 
-    val givenPoints = spark.sql("select x, y, z from pickupinfo where x >= " + minX + " and y >= " + minY  + " and z >= " + minZ + " and x <= " + maxX + " and y <= " + maxY +  " and z <= " + maxZ ).persist()
-    givenPoints.createOrReplaceTempView("givenPoints")
-    givenPoints.show()
+    val points = spark.sql("select x, y, z from pickupinfo where x >= " + minX + " and y >= " + minY  + " and z >= " + minZ + " and x <= " + maxX + " and y <= " + maxY +  " and z <= " + maxZ ).persist()
+    points.createOrReplaceTempView("points")
+    points.show()
 
-    // Get the points and the number of values for each set
-    val pointsAndCount = spark.sql("select x, y, z, count(*) as pointValues from givenPoints group by x, y, z").persist()
+    val pointsAndCount = spark.sql("select x, y, z, count(*) as pointValues from points group by x, y, z").persist()
     pointsAndCount.createOrReplaceTempView("pointsAndCount")
     pointsAndCount.show()
 
-    // Calculate the sum and the sum of the Squares of the points.
-    val sumofPoints = spark.sql("select sum(pointValues) as sumVal, sum(square(pointValues)) as squaredSum from pointsAndCount").persist()
-    sumofPoints.createOrReplaceTempView("sumofPoints")
-    sumofPoints.show()
+    val pointsSum = spark.sql("select sum(pointValues) as sumValue, sum(calculateSquare(pointValues)) as sumOfSquare from pointsAndCount").persist()
+    pointsSum.createOrReplaceTempView("pointsSum")
+    pointsSum.show()
 
-    val sumVal = sumofPoints.first().getLong(0)
-    val squaredSum = sumofPoints.first().getDouble(1)
+    val sumValue = pointsSum.first().getLong(0)
+    val sumOfSquare = pointsSum.first().getDouble(1)
 
-    val mean = sumVal.toDouble / numCells.toDouble
-    println(mean)
-    val SD = math.sqrt((squaredSum.toDouble / numCells.toDouble) - (mean.toDouble * mean.toDouble))
-    println(SD)
+    val mean = sumValue.toDouble / numCells.toDouble
+    val std = math.sqrt((sumOfSquare.toDouble / numCells.toDouble) - (mean.toDouble * mean.toDouble))
 
 
 
-    val Neighbours = spark.sql(
-      "select getNeighboursNumber( "+ minX + "," + minY + "," + minZ + "," + maxX + "," + maxY + "," + maxZ + "," + "a1.x, a1.y, a1.z) as numberOfNeighbours," +
-        "a1.x as x, a1.y as y, a1.z as z, " +   // x,y and z value in pointsAndCount
-        //"a2.x as x2, a2.y as y2, a2.z as z2," +
-        "sum(a2.pointValues) as sumOfCount " +  //this get all neighbours to a1.
+    val neighbors = spark.sql(
+      "select getNeighbourValue( "+ minX + "," + minY + "," + minZ + "," + maxX + "," + maxY + "," + maxZ + "," + "a1.x, a1.y, a1.z) as numberOfneighbors," +
+        "a1.x as x, a1.y as y, a1.z as z, sum(a2.pointValues) as countSum " +
         "from pointsAndCount as a1, pointsAndCount as a2 " +
         "where " +
-            "(abs(a2.x - a1.x) < 2) " +      // this get all the neighbours of a1
+            "(abs(a2.x - a1.x) < 2) " +
             "and (abs(a2.y - a1.y) < 2 ) " +
             "and (abs(a2.z - a1.z) < 2 ) " +
                 "group by a1.x, a1.y, a1.z order by a1.x, a1.y, a1.z").persist()
-    Neighbours.createOrReplaceTempView("NeighboursCount")
-    Neighbours.show()
+    neighbors.createOrReplaceTempView("neighborsCount")
+    neighbors.show()
 
-    val gScore = spark.sql("select x,y,z, getGetisOrdScore(sumOfCount, numberOfNeighbours," + mean +","+ SD +","+ numCells +") as gScore from NeighboursCount Order by gScore desc")
-    gScore.createOrReplaceTempView("gScore")
-    gScore.show()
+    val ordScore = spark.sql("select x,y,z, calculateOrdScore(countSum, numberOfneighbors," + mean +","+ std +","+ numCells +") as ordScore from neighborsCount Order by ordScore desc")
+    ordScore.createOrReplaceTempView("ordScore")
+    ordScore.show()
 
-    val Result = spark.sql("select x,y,z from gScore").limit(50)
-    Result.createOrReplaceGlobalTempView("Result")
-    Result.show()
+    val finalResult = spark.sql("select x,y,z from ordScore").limit(50)
+    finalResult.createOrReplaceGlobalTempView("finalResult")
+    finalResult.show()
 
-    return Result // YOU NEED TO CHANGE THIS PART
+    return finalResult // YOU NEED TO CHANGE THIS PART
   }
 }
