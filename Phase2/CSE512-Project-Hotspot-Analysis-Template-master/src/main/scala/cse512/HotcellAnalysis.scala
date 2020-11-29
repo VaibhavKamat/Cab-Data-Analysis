@@ -32,7 +32,7 @@ object HotcellAnalysis {
     var newCoordinateName = Seq("x", "y", "z")
     pickupInfo = pickupInfo.toDF(newCoordinateName:_*)
     pickupInfo = pickupInfo.sort("x", "y", "z")
-    pickupInfo.createOrReplaceTempView("pickupinfo")
+    pickupInfo.createOrReplaceTempView("pickupinfo") // create temp view to be used later
     pickupInfo.show()
 
     // Define the min and max of x, y, z
@@ -45,18 +45,20 @@ object HotcellAnalysis {
     val numCells = (maxX - minX + 1)*(maxY - minY + 1)*(maxZ - minZ + 1)
 
     // YOU NEED TO CHANGE THIS PART
-    spark.udf.register("calculateSquare", (inputX: Int) => HotcellUtils.calculateSquare(inputX))
+    spark.udf.register("calculateSquare", (inputX: Int) => HotcellUtils.calculateSquare(inputX)) // defined in HotcellUtils
 
-    spark.udf.register("getNeighbourValue", (minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int, inputX: Int, inputY: Int, inputZ: Int)
+    spark.udf.register("getNeighbourValue", (minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int, inputX: Int, inputY: Int, inputZ: Int) // defined in HotcellUtils
     => HotcellUtils.getNeighbourValue(minX, minY, minZ, maxX, maxY, maxZ, inputX, inputY, inputZ))
 
-    spark.udf.register("calculateOrdScore", (countSum:Int,  totalNeighbors:Int, mean: Double, std:Double, totalCells: Int)
+    spark.udf.register("calculateOrdScore", (countSum:Int,  totalNeighbors:Int, mean: Double, std:Double, totalCells: Int) // defined in HotcellUtils
     => HotcellUtils.calculateOrdScore(countSum,  totalNeighbors, mean, std, totalCells))
 
+    // Find all points within [minX, maxX], [minY, maxY], [minZ, maxZ]
     val points = spark.sql("select x, y, z from pickupinfo where x >= " + minX + " and y >= " + minY  + " and z >= " + minZ + " and x <= " + maxX + " and y <= " + maxY +  " and z <= " + maxZ ).persist()
     points.createOrReplaceTempView("points")
     points.show()
 
+    // Create count of identical points and store in temp view pointsAndCount
     val pointsAndCount = spark.sql("select x, y, z, count(*) as pointValues from points group by x, y, z").persist()
     pointsAndCount.createOrReplaceTempView("pointsAndCount")
     pointsAndCount.show()
@@ -71,17 +73,10 @@ object HotcellAnalysis {
     val mean = sumValue.toDouble / numCells.toDouble
     val std = math.sqrt((sumOfSquare.toDouble / numCells.toDouble) - (mean.toDouble * mean.toDouble))
 
-
-
     val neighbors = spark.sql(
-      "select getNeighbourValue( "+ minX + "," + minY + "," + minZ + "," + maxX + "," + maxY + "," + maxZ + "," + "a1.x, a1.y, a1.z) as numberOfneighbors," +
-        "a1.x as x, a1.y as y, a1.z as z, sum(a2.pointValues) as countSum " +
-        "from pointsAndCount as a1, pointsAndCount as a2 " +
-        "where " +
-            "(abs(a2.x - a1.x) < 2) " +
-            "and (abs(a2.y - a1.y) < 2 ) " +
-            "and (abs(a2.z - a1.z) < 2 ) " +
-                "group by a1.x, a1.y, a1.z order by a1.x, a1.y, a1.z").persist()
+      "select getNeighbourValue( " + minX + "," + minY + "," + minZ + "," + maxX + "," + maxY + "," + maxZ + "," + "pc1.x, pc1.y, pc1.z) as numberOfneighbors," +
+      "pc1.x as x, pc1.y as y, pc1.z as z, sum(pc2.pointValues) as countSum from pointsAndCount as pc1, pointsAndCount as pc2 where " +
+      "(abs(pc2.x - pc1.x) < 2) and (abs(pc2.y - pc1.y) < 2 ) and (abs(pc2.z - pc1.z) < 2 ) group by pc1.x, pc1.y, pc1.z order by pc1.x, pc1.y, pc1.z").persist()
     neighbors.createOrReplaceTempView("neighborsCount")
     neighbors.show()
 
